@@ -265,7 +265,21 @@ button { cursor: pointer; }
       else groups.push({ t, section, items: [item] });
     }
     groups.sort((a, b) => a.t - b.t);
+    for (const g of groups) g.dur = estimateDuration(g.items);
     return { videoId, groups };
+  }
+
+  // コールを言い終えるまでのおおよその秒数（文字数と「×4」などの繰り返しから見積もる）
+  function estimateDuration(items) {
+    let longest = 0;
+    for (const it of items) {          // 煽りあり／なしなどの分岐は、長い方に合わせる
+      const text = it.lines.map(l => l.map(s => typeof s === 'string' ? s : s.b).join('')).join('');
+      const chars = text.replace(/[\s「」『』（）()!！?？、。・~〜]|\p{Extended_Pictographic}|×\d+/gu, '').length;
+      let sec = chars * 0.3;
+      for (const m of text.matchAll(/×(\d+)/g)) sec += (Math.min(+m[1], 16) - 1) * 1.2;
+      longest = Math.max(longest, sec);
+    }
+    return Math.max(HOLD, longest + 1.5);
   }
 
   /* ---------- 描画（テキストだけを組み立てる。サイトのHTMLはそのまま差し込まない） ---------- */
@@ -453,8 +467,8 @@ button { cursor: pointer; }
 
     let idx = findIdx(eff);
     const nextG = g[idx + 1];
-    // 次のコールまで間が空き、今のコールから時間が経ったら表示を下げる
-    const stale = idx >= 0 && eff - g[idx].t > HOLD && (!nextG || nextG.t - eff > 1.5);
+    // 次のコールまで間が空き、今のコールを言い終えた頃を過ぎたら表示を下げる
+    const stale = idx >= 0 && eff - g[idx].t > (g[idx].dur || HOLD) && (!nextG || nextG.t - eff > 1.5);
     const shown = stale ? -1 : idx;
 
     if (shown !== state.curIdx || force) {
