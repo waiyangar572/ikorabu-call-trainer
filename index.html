@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#110e19">
+<title>イコラブ コール練習</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Zen+Kaku+Gothic+New:wght@400;700&display=swap">
+<style>
+/* 会場の暗がりで見る1画面ツール：上に動画、真ん中に「今のコール」、下に全コール表 */
+:root {
+  --bg: #110e19;
+  --surface: #1c1828;
+  --surface-2: #262036;
+  --line: #352d4a;
+  --fg: #f4effc;
+  --muted: #a49bbd;
+  --accent: #ff8fd0;      /* ペンライトの光 */
+  --accent-ink: #2a0d1f;
+  --next: #9fd8ff;
+  --font-call: "M PLUS Rounded 1c", "Hiragino Maru Gothic ProN", "Zen Kaku Gothic New", sans-serif;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  -webkit-tap-highlight-color: transparent;
+}
+[hidden] { display: none !important; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap { max-width: 720px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 40px; display: flex; flex-direction: column; gap: 12px; }
+
+/* 曲選び */
+.picker { display: flex; gap: 8px; align-items: center; }
+.picker select { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-weight: 700; }
+.icon-btn { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; white-space: nowrap; }
+
+/* 動画 */
+.stage { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
+.video { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.video > div, .video iframe { position: absolute; inset: 0; width: 100%; height: 100%; }
+.video .placeholder { display: grid; place-items: center; color: var(--muted); font-size: 13px; padding: 16px; text-align: center; }
+
+/* 今／次のコール */
+.now {
+  background: var(--surface); border-radius: 14px; padding: 12px 14px 14px;
+  min-height: 132px; display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--line); transition: border-color .15s, box-shadow .15s;
+}
+.now.hit { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 28px -6px var(--accent); }
+.now-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+.now-head .sec { color: var(--accent); font-weight: 700; }
+.call { font-family: var(--font-call); font-weight: 800; font-size: clamp(22px, 6.4vw, 32px); line-height: 1.35; text-wrap: balance; overflow-wrap: anywhere; }
+.call .variant + .variant { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.call .label { display: inline-block; font-family: var(--font-body); font-size: 11px; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 1px 8px; margin-bottom: 2px; letter-spacing: .03em; }
+.call rt { font-size: .42em; font-weight: 500; color: var(--muted); }
+.call.idle { color: var(--muted); font-size: 18px; font-weight: 500; }
+.call.hidden-practice { color: var(--muted); font-size: 18px; font-weight: 500; }
+
+.next { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; padding: 8px 12px; background: var(--surface-2); border-radius: 12px; }
+.next .tag { font-size: 11px; font-weight: 700; color: var(--next); letter-spacing: .06em; }
+.next .text { min-width: 0; font-family: var(--font-call); font-weight: 500; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next .bar { grid-column: 1 / -1; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.next .bar i { display: block; height: 100%; width: 0; background: var(--next); }
+.next .count { font-variant-numeric: tabular-nums; color: var(--next); font-size: 12px; }
+
+/* 操作 */
+.controls { display: flex; flex-wrap: wrap; gap: 6px; }
+.controls button, .controls select { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.controls .play { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; min-width: 72px; }
+.controls [aria-pressed="true"] { background: var(--surface-2); border-color: var(--accent); color: var(--accent); }
+.offset { display: inline-flex; align-items: center; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 0 4px; font-size: 13px; }
+.offset button { border: 0; background: transparent; padding: 6px 8px; }
+.offset span { font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: center; color: var(--muted); }
+
+/* コール表 */
+.list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-top: 4px; }
+.list-head h2 { margin: 0; font-size: 14px; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+.list-head a { color: var(--muted); font-size: 12px; }
+.list { display: flex; flex-direction: column; }
+.list .section { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .06em; padding: 14px 4px 4px; }
+.row { display: grid; grid-template-columns: 3.4em 1fr; gap: 10px; align-items: start; text-align: left; width: 100%; background: transparent; border: 0; border-radius: 10px; padding: 8px 6px; }
+.row:hover { background: var(--surface); }
+.row.current { background: var(--surface-2); }
+.row .t { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; padding-top: 2px; }
+.row.current .t { color: var(--accent); font-weight: 700; }
+.row .c { min-width: 0; font-family: var(--font-call); font-weight: 500; overflow-wrap: anywhere; }
+.row .c .label { font-family: var(--font-body); font-size: 11px; color: var(--accent); font-weight: 700; margin-right: 4px; }
+.row .c rt { font-size: .55em; color: var(--muted); }
+.row .c .variant + .variant { margin-top: 4px; }
+
+/* 状態・取り込み */
+.notice { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.notice.err { border-color: #ff8f8f; }
+.notice textarea { width: 100%; min-height: 110px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; font-family: ui-monospace, monospace; }
+.notice .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.notice .actions button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 700; }
+.notice code { font-size: 12px; overflow-wrap: anywhere; }
+.foot { color: var(--muted); font-size: 12px; }
+.foot a { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="picker">
+    <select id="song" aria-label="曲を選ぶ"><option>曲一覧を読み込み中…</option></select>
+    <button class="icon-btn" id="pasteBtn" type="button">貼り付け</button>
+  </div>
+
+  <div id="status" class="notice" hidden></div>
+
+  <div class="stage">
+    <div class="video"><div id="player"><div class="placeholder">曲を選ぶと、コールのタイムスタンプが付いたライブ映像がここに出ます</div></div></div>
+
+    <div class="now" id="now">
+      <div class="now-head"><span class="sec" id="nowSec">―</span><span id="nowTime">0:00</span></div>
+      <div class="call idle" id="nowCall">再生するとコールが出ます</div>
+    </div>
+
+    <div class="next" id="next">
+      <span class="tag">NEXT</span>
+      <span class="text" id="nextText">―</span>
+      <div class="bar"><i id="nextBar"></i></div>
+      <span class="count" id="nextCount"></span>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="back">−5秒</button>
+      <button type="button" class="play" id="play">再生</button>
+      <button type="button" id="fwd">+5秒</button>
+      <select id="rate" aria-label="再生速度">
+        <option value="1">1倍</option>
+        <option value="0.75">0.75倍</option>
+        <option value="0.5">0.5倍</option>
+      </select>
+      <span class="offset" title="映像とコールのズレを直す">
+        <button type="button" id="offMinus" aria-label="コールを遅らせる">−</button>
+        <span id="offVal">ズレ 0.0秒</span>
+        <button type="button" id="offPlus" aria-label="コールを早める">＋</button>
+      </span>
+      <button type="button" id="practice" aria-pressed="false">練習モード</button>
+      <button type="button" id="follow" aria-pressed="true">表を追従</button>
+    </div>
+  </div>
+
+  <div class="list-head">
+    <h2 id="listTitle">コール表</h2>
+    <a id="srcLink" href="https://ikorabucall.com/" target="_blank" rel="noopener">出典ページ</a>
+  </div>
+  <div class="list" id="list"></div>
+
+  <p class="foot">コールとタイムスタンプは <a href="https://ikorabucall.com/" target="_blank" rel="noopener">＝LOVE（イコラブ） コール一覧・ライブガイド</a> の各曲ページを開くたびに読み込んで表示しています。このツールはデータを保存しません。</p>
+</div>
+
+<script>
+(() => {
+  const API = 'https://ikorabucall.com/wp-json/wp/v2/pages';
+  const LEAD = 0.35;            // コールを少し早めに出す（構える時間）
+  const HOLD = 7;               // 次のコールまでが長いとき、今のコールを残す秒数
+  const $ = id => document.getElementById(id);
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('ikc:' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem('ikc:' + k, JSON.stringify(v)); } catch {} }
+  };
+
+  const state = {
+    songs: [], groups: [], videoId: null, link: null,
+    offset: store.get('offset', 0), practice: false, follow: true,
+    player: null, apiReady: false, pendingVideo: null, curIdx: -1, revealed: false
+  };
+
+  /* ---------- 文字列ユーティリティ ---------- */
+  const decode = s => new DOMParser().parseFromString(s, 'text/html').documentElement.textContent;
+  const fmt = sec => { sec = Math.max(0, sec); const m = Math.floor(sec / 60), s = Math.floor(sec % 60); return m + ':' + String(s).padStart(2, '0'); };
+  function songName(title) {
+    const t = decode(title).trim();
+    const m = t.match(/（イコラブ）\s*「(.*)」\s*コール/);
+    return m ? m[1].trim() : t.replace(/\s*コール解説.*$/, '');
+  }
+
+  /* ---------- 曲ページのHTMLをコール表に変換 ---------- */
+  function serialize(node, segs, labels) {
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) { segs.push(ch.nodeValue.replace(/ /g, ' ')); continue; }
+      if (ch.nodeType !== 1) continue;
+      const tag = ch.tagName;
+      if (tag === 'BUTTON' || tag === 'SCRIPT' || tag === 'STYLE') continue;
+      if (tag === 'BR') { segs.push('\n'); continue; }
+      if (tag === 'STRONG' || tag === 'B') { const l = ch.textContent.trim(); if (l) labels.push(l); continue; }
+      if (tag === 'RUBY') {
+        let b = '', r = '';
+        for (const rc of ch.childNodes) {
+          if (rc.nodeType === 1 && rc.tagName === 'RT') r += rc.textContent;
+          else if (rc.nodeType === 1 && rc.tagName === 'RP') continue;
+          else b += rc.textContent;
+        }
+        segs.push({ b: b.trim(), r: r.trim() });
+        continue;
+      }
+      serialize(ch, segs, labels);
+    }
+  }
+  function toLines(segs) {
+    const lines = [[]];
+    for (const s of segs) {
+      if (typeof s === 'string') {
+        const parts = s.split('\n');
+        parts.forEach((p, i) => { if (i > 0) lines.push([]); if (p) lines[lines.length - 1].push(p.replace(/\s+/g, ' ')); });
+      } else lines[lines.length - 1].push(s);
+    }
+    return lines.map(l => {
+      if (typeof l[0] === 'string') l[0] = l[0].replace(/^\s+/, '');
+      const e = l.length - 1;
+      if (typeof l[e] === 'string') l[e] = l[e].replace(/\s+$/, '');
+      return l.filter(x => x !== '');
+    }).filter(l => l.length);
+  }
+  function parseTime(el) {
+    const btn = el.querySelector('button');
+    const on = btn && btn.getAttribute('onclick') || '';
+    let m = on.match(/jumpTo\(\s*([\d.]+)\s*\)/);
+    if (m) return parseFloat(m[1]);
+    m = (btn ? btn.textContent : el.textContent).match(/(\d+):(\d{2})/);
+    return m ? (+m[1]) * 60 + (+m[2]) : null;
+  }
+  function parsePage(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const ytId = src => { const m = (src || '').match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/); return m ? m[1] : null; };
+    const frames = [...doc.querySelectorAll('iframe')];
+    const callFrame = doc.querySelector('#icorabu-player')
+      || doc.querySelector('.call-video-box iframe')
+      || frames.find(f => /enablejsapi/.test(f.src))
+      || frames.find(f => ytId(f.src));
+    const videoId = callFrame ? ytId(callFrame.getAttribute('src')) : null;
+
+    const groups = [];
+    let section = '';
+    for (const el of doc.querySelectorAll('h3, h4, .call-line')) {
+      if (el.matches('h3, h4')) {
+        const t = el.textContent.trim();
+        if (el.tagName === 'H4' || /タイムスタンプ/.test(t)) section = el.tagName === 'H4' ? t : section;
+        continue;
+      }
+      const t = parseTime(el);
+      if (t == null) continue;
+      const segs = [], labels = [];
+      serialize(el, segs, labels);
+      const lines = toLines(segs);
+      if (!lines.length && !labels.length) continue;
+      const item = { label: labels.join(' '), lines };
+      const last = groups[groups.length - 1];
+      if (last && Math.abs(last.t - t) < 0.05) last.items.push(item);
+      else groups.push({ t, section, items: [item] });
+    }
+    groups.sort((a, b) => a.t - b.t);
+    return { videoId, groups };
+  }
+
+  /* ---------- 描画（テキストだけを組み立てる。サイトのHTMLはそのまま差し込まない） ---------- */
+  function renderItems(container, items, compact) {
+    container.textContent = '';
+    for (const it of items) {
+      const v = document.createElement('div');
+      v.className = 'variant';
+      if (it.label) {
+        const l = document.createElement('span'); l.className = 'label'; l.textContent = it.label;
+        v.appendChild(l);
+        if (!compact) v.appendChild(document.createElement('br'));
+      }
+      it.lines.forEach((line, i) => {
+        if (i > 0) v.appendChild(document.createElement('br'));
+        for (const s of line) {
+          if (typeof s === 'string') v.appendChild(document.createTextNode(s));
+          else {
+            const r = document.createElement('ruby'); r.appendChild(document.createTextNode(s.b));
+            const rt = document.createElement('rt'); rt.textContent = s.r; r.appendChild(rt);
+            v.appendChild(r);
+          }
+        }
+      });
+      container.appendChild(v);
+    }
+  }
+  const plain = items => items.map(it => (it.label ? '［' + it.label + '］' : '') + it.lines.map(l => l.map(s => typeof s === 'string' ? s : s.b).join('')).join(' ')).join(' ／ ');
+
+  function renderList() {
+    const list = $('list'); list.textContent = '';
+    let sec = null;
+    state.groups.forEach((g, i) => {
+      if (g.section !== sec) {
+        sec = g.section;
+        if (sec) { const h = document.createElement('div'); h.className = 'section'; h.textContent = sec; list.appendChild(h); }
+      }
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'row'; b.dataset.i = i;
+      const t = document.createElement('span'); t.className = 't'; t.textContent = fmt(g.t);
+      const c = document.createElement('span'); c.className = 'c';
+      renderItems(c, g.items, true);
+      b.append(t, c);
+      b.addEventListener('click', () => seek(Math.max(0, g.t - 2)));
+      list.appendChild(b);
+    });
+    if (!state.groups.length) {
+      const p = document.createElement('p'); p.className = 'foot';
+      p.textContent = 'この曲のページにはコールのタイムスタンプがありませんでした。';
+      list.appendChild(p);
+    }
+  }
+
+  /* ---------- 状態表示 ---------- */
+  function showStatus(msg, opts = {}) {
+    const box = $('status');
+    box.textContent = ''; box.className = 'notice' + (opts.err ? ' err' : '');
+    const p = document.createElement('div'); p.textContent = msg; box.appendChild(p);
+    if (opts.paste) {
+      const hint = document.createElement('div'); hint.className = 'foot';
+      hint.append('曲ページのURLの代わりに、次の形のURLをブラウザで開いて中身を全部コピーし、ここに貼り付けても読み込めます：');
+      const code = document.createElement('code'); code.textContent = API + '?slug=（曲ページURLの最後の部分）';
+      hint.appendChild(document.createElement('br')); hint.appendChild(code);
+      const ta = document.createElement('textarea'); ta.id = 'pasteArea'; ta.placeholder = 'JSON または 曲ページのHTML を貼り付け';
+      const act = document.createElement('div'); act.className = 'actions';
+      const go = document.createElement('button'); go.type = 'button'; go.textContent = '読み込む';
+      const close = document.createElement('button'); close.type = 'button'; close.textContent = '閉じる';
+      close.style.background = 'var(--surface-2)'; close.style.color = 'var(--fg)';
+      go.addEventListener('click', () => loadFromPaste(ta.value));
+      close.addEventListener('click', () => { box.hidden = true; });
+      act.append(go, close);
+      box.append(hint, ta, act);
+    }
+    box.hidden = false;
+  }
+  const hideStatus = () => { $('status').hidden = true; };
+
+  /* ---------- 読み込み ---------- */
+  async function loadSongs() {
+    const all = [];
+    for (let page = 1; page <= 10; page++) {
+      const r = await fetch(`${API}?per_page=100&page=${page}&orderby=date&order=asc&_fields=slug,title,link`);
+      if (!r.ok) { if (page === 1) throw new Error('HTTP ' + r.status); break; }
+      const j = await r.json();
+      all.push(...j);
+      if (j.length < 100) break;
+    }
+    return all
+      .filter(p => /-call$/.test(p.slug) && p.slug !== 'ikorabu-call-list')
+      .map(p => ({ slug: p.slug, name: songName(p.title.rendered), link: p.link }));
+  }
+  function fillPicker() {
+    const sel = $('song'); sel.textContent = '';
+    const ph = document.createElement('option'); ph.value = ''; ph.textContent = `曲を選ぶ（${state.songs.length}曲）`; sel.appendChild(ph);
+    for (const s of state.songs) { const o = document.createElement('option'); o.value = s.slug; o.textContent = s.name; sel.appendChild(o); }
+  }
+  async function loadSong(slug) {
+    if (!slug) return;
+    showStatus('読み込み中…');
+    try {
+      const r = await fetch(`${API}?slug=${encodeURIComponent(slug)}&_fields=title,content,link`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      if (!j.length) throw new Error('ページが見つかりません');
+      applyPage(j[0].content.rendered, songName(j[0].title.rendered), j[0].link);
+      store.set('slug', slug);
+      try { history.replaceState(null, '', '#' + slug); } catch {}
+      hideStatus();
+    } catch (e) {
+      showStatus('サイトから曲ページを読み込めませんでした（' + e.message + '）。', { err: true, paste: true });
+    }
+  }
+  function loadFromPaste(text) {
+    text = (text || '').trim();
+    if (!text) return;
+    try {
+      let html = text, name = '貼り付けた曲', link = null;
+      if (text[0] === '[' || text[0] === '{') {
+        let j = JSON.parse(text); if (Array.isArray(j)) j = j[0];
+        html = j.content && j.content.rendered || '';
+        if (j.title) name = songName(j.title.rendered || j.title);
+        link = j.link || null;
+      } else {
+        const t = new DOMParser().parseFromString(text, 'text/html').querySelector('title');
+        if (t) name = songName(t.textContent.replace(/\s+–.*$/, ''));
+      }
+      applyPage(html, name, link);
+      hideStatus();
+    } catch (e) {
+      showStatus('貼り付けた内容を読めませんでした（' + e.message + '）。JSONかページのHTMLを丸ごと貼ってください。', { err: true, paste: true });
+    }
+  }
+  function applyPage(html, name, link) {
+    const { videoId, groups } = parsePage(html);
+    state.groups = groups; state.videoId = videoId; state.curIdx = -2;
+    $('listTitle').textContent = name + '　コール表（' + groups.length + '）';
+    const a = $('srcLink'); a.href = link || 'https://ikorabucall.com/'; a.textContent = '出典ページ';
+    renderList();
+    if (videoId) loadVideo(videoId);
+    else showStatus('このページからライブ映像が見つかりませんでした。コール表だけ表示しています。', { err: true });
+    update(true);
+  }
+
+  /* ---------- YouTube ---------- */
+  window.onYouTubeIframeAPIReady = () => { state.apiReady = true; if (state.pendingVideo) loadVideo(state.pendingVideo); };
+  const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s);
+
+  function loadVideo(id) {
+    if (!state.apiReady) { state.pendingVideo = id; return; }
+    state.pendingVideo = null;
+    if (state.player && state.player.cueVideoById) { state.player.cueVideoById(id); return; }
+    state.player = new YT.Player('player', {
+      videoId: id,
+      playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+      events: {
+        onReady: () => { state.player.setPlaybackRate(+$('rate').value); },
+        onStateChange: e => {
+          const playing = e.data === YT.PlayerState.PLAYING;
+          $('play').textContent = playing ? '一時停止' : '再生';
+          if (playing) wake(); else unwake();
+        }
+      }
+    });
+  }
+  const now = () => (state.player && state.player.getCurrentTime) ? state.player.getCurrentTime() : 0;
+  function seek(t) { if (state.player && state.player.seekTo) { state.player.seekTo(t, true); state.player.playVideo(); } }
+
+  /* ---------- 画面のロック防止 ---------- */
+  let lock = null;
+  async function wake() { try { if ('wakeLock' in navigator && !lock) { lock = await navigator.wakeLock.request('screen'); lock.addEventListener('release', () => { lock = null; }); } } catch {} }
+  function unwake() { try { lock && lock.release(); } catch {} lock = null; }
+
+  /* ---------- 毎フレーム更新 ---------- */
+  function findIdx(t) {
+    const g = state.groups; let lo = 0, hi = g.length - 1, ans = -1;
+    while (lo <= hi) { const m = (lo + hi) >> 1; if (g[m].t <= t) { ans = m; lo = m + 1; } else hi = m - 1; }
+    return ans;
+  }
+  function update(force) {
+    const g = state.groups;
+    const raw = now();
+    const t = raw + state.offset;        // 映像の時刻をコール表の時刻に合わせる
+    const eff = t + LEAD;
+    $('nowTime').textContent = fmt(raw);
+
+    let idx = findIdx(eff);
+    const nextG = g[idx + 1];
+    // 次のコールまで間が空き、今のコールから時間が経ったら表示を下げる
+    const stale = idx >= 0 && eff - g[idx].t > HOLD && (!nextG || nextG.t - eff > 1.5);
+    const shown = stale ? -1 : idx;
+
+    if (shown !== state.curIdx || force) {
+      state.curIdx = shown; state.revealed = false;
+      const call = $('nowCall'), box = $('now');
+      if (shown < 0) {
+        call.className = 'call idle';
+        call.textContent = g.length ? (idx < 0 ? 'まだコールなし' : '…') : '再生するとコールが出ます';
+        $('nowSec').textContent = idx >= 0 ? g[idx].section || '―' : (g[0] && g[0].section) || '―';
+        box.classList.remove('hit');
+      } else {
+        $('nowSec').textContent = g[shown].section || '―';
+        if (state.practice) { call.className = 'call hidden-practice'; call.textContent = 'タップで答えを見る'; }
+        else { call.className = 'call'; renderItems(call, g[shown].items, false); }
+        box.classList.add('hit');
+        clearTimeout(update.flash); update.flash = setTimeout(() => box.classList.remove('hit'), 450);
+      }
+      document.querySelectorAll('.row.current').forEach(r => r.classList.remove('current'));
+      const row = idx >= 0 && document.querySelector(`.row[data-i="${idx}"]`);
+      if (row) {
+        row.classList.add('current');
+        if (state.follow && !force) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      const n = g[idx + 1];
+      $('nextText').textContent = n ? (state.practice ? (n.section || '') + ' のコール' : plain(n.items)) : '―';
+    }
+
+    const n = g[idx + 1];
+    if (n) {
+      const left = n.t - eff;
+      const span = Math.min(4, n.t - (idx >= 0 ? g[idx].t : 0));
+      $('nextBar').style.width = Math.max(0, Math.min(100, (1 - left / span) * 100)) + '%';
+      $('nextCount').textContent = left < 10 ? left.toFixed(1) + 's' : '';
+    } else { $('nextBar').style.width = '0%'; $('nextCount').textContent = ''; }
+  }
+  (function loop() { try { update(false); } catch {} requestAnimationFrame(loop); })();
+
+  /* ---------- 操作 ---------- */
+  $('play').addEventListener('click', () => {
+    const p = state.player; if (!p || !p.getPlayerState) return;
+    p.getPlayerState() === YT.PlayerState.PLAYING ? p.pauseVideo() : p.playVideo();
+  });
+  $('back').addEventListener('click', () => seek(Math.max(0, now() - 5)));
+  $('fwd').addEventListener('click', () => seek(now() + 5));
+  $('rate').addEventListener('change', e => { state.player && state.player.setPlaybackRate && state.player.setPlaybackRate(+e.target.value); });
+  function setOffset(v) {
+    state.offset = Math.round(v * 10) / 10; store.set('offset', state.offset);
+    $('offVal').textContent = 'ズレ ' + (state.offset > 0 ? '+' : '') + state.offset.toFixed(1) + '秒';
+    update(true);
+  }
+  $('offMinus').addEventListener('click', () => setOffset(state.offset - 0.1));
+  $('offPlus').addEventListener('click', () => setOffset(state.offset + 0.1));
+  $('practice').addEventListener('click', e => {
+    state.practice = !state.practice; e.currentTarget.setAttribute('aria-pressed', state.practice); update(true);
+  });
+  $('follow').addEventListener('click', e => {
+    state.follow = !state.follow; e.currentTarget.setAttribute('aria-pressed', state.follow);
+  });
+  $('now').addEventListener('click', () => {
+    if (!state.practice || state.curIdx < 0 || state.revealed) return;
+    state.revealed = true;
+    const call = $('nowCall'); call.className = 'call'; renderItems(call, state.groups[state.curIdx].items, false);
+  });
+  $('song').addEventListener('change', e => loadSong(e.target.value));
+  $('pasteBtn').addEventListener('click', () => showStatus('曲ページのデータを貼り付けて読み込みます。', { paste: true }));
+
+  /* ---------- 起動 ---------- */
+  setOffset(state.offset);
+  (async () => {
+    try {
+      state.songs = await loadSongs();
+      fillPicker();
+      const want = (location.hash || '').slice(1) || store.get('slug', '');
+      if (want && state.songs.some(s => s.slug === want)) { $('song').value = want; loadSong(want); }
+    } catch (e) {
+      $('song').textContent = '';
+      const o = document.createElement('option'); o.textContent = '曲一覧を読み込めませんでした'; $('song').appendChild(o);
+      showStatus('サイトから曲一覧を読み込めませんでした（' + e.message + '）。サイト側が他のサイトからの読み込みを許可していない可能性があります。', { err: true, paste: true });
+    }
+  })();
+})();
+</script>
+</body>
+</html>
