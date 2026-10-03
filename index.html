@@ -466,9 +466,8 @@ button { cursor: pointer; }
     $('nowTime').textContent = fmt(raw);
 
     let idx = findIdx(eff);
-    const nextG = g[idx + 1];
-    // 次のコールまで間が空き、今のコールを言い終えた頃を過ぎたら表示を下げる
-    const stale = idx >= 0 && eff - g[idx].t > (g[idx].dur || HOLD) && (!nextG || nextG.t - eff > 1.5);
+    // 今のコールを言い終えた頃を過ぎたら表示を下げ、次のコールが来るまで戻さない
+    const stale = idx >= 0 && eff - g[idx].t > (g[idx].dur || HOLD);
     const shown = stale ? -1 : idx;
 
     if (shown !== state.curIdx || force) {
